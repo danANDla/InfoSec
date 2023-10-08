@@ -1,5 +1,4 @@
 import java.io.File
-import java.io.InputStream
 
 fun main(args: Array<String>) {
     doMain(args)
@@ -7,7 +6,7 @@ fun main(args: Array<String>) {
 
 fun doMain(args: Array<String>){
 
-    val d = EllipticDecryptor("letters_points", EllipticCurvePoint(-1L, 1L, false), 51, 751, -1, false)
+    val d = EllipticDecryptor("letters_points", EllipticCurvePoint(-1L, 1L, false), 44, 751, -1, false)
     val r = Regex("\\d+")
 
     val crypted = File(args[0]).readText()
@@ -27,6 +26,6 @@ fun doMain(args: Array<String>){
 }
 
 fun allPoints(){
-    val d = EllipticDecryptor("letters_points", EllipticCurvePoint(-1L, 1L, false), 44, 751, -1, true)
+    val d = EllipticDecryptor("letters_points", EllipticCurvePoint(-1L, 1L, false), 29, 751, -1, true)
     d.getPointMultiplier(EllipticCurvePoint(-10000,0, true))
 }

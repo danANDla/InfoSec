@@ -1,5 +1,7 @@
+import java.math.BigInteger
+
 class EllipticDecryptor(
-    private val alphabetFile: String,
+    alphabetFile: String,
     private val basePoint: EllipticCurvePoint,
     private val secretKey: Long,
     private val primeNumber: Long,
@@ -9,7 +11,7 @@ class EllipticDecryptor(
     val alphabet = EllipticAlphabet()
 
     init {
-        alphabet.readAlphabetFromFile("letters_points")
+        alphabet.readAlphabetFromFile(alphabetFile)
     }
 
     fun getPointMultiplier(point: EllipticCurvePoint): Long {
@@ -24,36 +26,34 @@ class EllipticDecryptor(
     }
 
     private fun multiplyPoint(point: EllipticCurvePoint, m: Long): EllipticCurvePoint {
-        var i = m - 1
-        var p = point
+        var p = EllipticCurvePoint(0, 0, true)
+        var bits = Integer.toBinaryString(m.toInt())
+        var i = bits.length
         while (i > 0) {
+            p = pointAddition(p, p, primeNumber, a)
+            if (bits[bits.length - i] == '1') {
+                p = pointAddition(point, p, primeNumber, a)
+            }
             i--
-            p = pointAddition(point, p, primeNumber, a)
         }
         return p
     }
 
     private fun subPoints(p1: EllipticCurvePoint, p2: EllipticCurvePoint): EllipticCurvePoint {
-        val points =  pointSub(p1, p2, primeNumber, a)
-        if(alphabet.getLetterFromCode(Pair(points.first.x.toInt(), points.first.y.toInt())) != ""){
-            return points.first
-        }
-        return points.second
+        return pointSub(p1, p2, primeNumber, a)
     }
 
     fun decrypt(x1: Long, y1: Long, x2: Long, y2: Long) {
         val p = EllipticCurvePoint(x1, y1, false)
         val q = EllipticCurvePoint(x2, y2, false)
-        val m = getPointMultiplier(p)
-        if (verbose) println(String.format("k=%d", m))
 
-        val np = multiplyPoint(basePoint, secretKey * m)
+        val np = multiplyPoint(p, secretKey)
         if (verbose) println(
             String.format(
                 "%d * (%d,%d) = (%d,%d), isPointAtInfinity=%s",
-                secretKey * m,
-                0,
-                1,
+                secretKey,
+                p.x,
+                p.y,
                 np.x,
                 np.y,
                 if (np.pointAtInfinity) "true" else "false"
@@ -83,82 +83,59 @@ class EllipticDecryptor(
             )
             println("-------------------------")
         }
-        println(String.format("(%3d,%3d) | %s", s.x,s.y,alphabet.getLetterFromCode(Pair(s.x.toInt(), s.y.toInt()))))
+        println(String.format("(%3d,%3d) | %s", s.x, s.y, alphabet.getLetterFromCode(Pair(s.x.toInt(), s.y.toInt()))))
     }
 
     companion object {
-        fun gcd(
-            n1: Long,
-            n2: Long
-        ): Long {
-            var a = n1
-            var b = n2
-            while (b > 0) {
-                a %= b
-                a = b.also { b = a }
-            }
-            return a
-        }
-
-        private fun gcdex(
-            n1: Long,
-            n2: Long,
-        ): Pair<Long, Pair<Long, Long>> {
-            if (n1 == 0L) {
-                return Pair(n2, Pair(0L, 1L))
-            }
-            val d = gcdex(n2 % n1, n1)
-            val x1 = d.second.first
-            val y1 = d.second.second
-            return Pair(d.first, Pair(y1 - (n2 / n1) * x1, x1))
-        }
-
-        private fun invMod(
-            n1: Long,
-            n2: Long
-        ): Long {
-            val g = gcdex(n1, n2)
-            if (g.first != 1L && g.first != -1L) throw Exception("No solution for Diophantine")
-            return (g.second.first % n2 + n2) % n2
-        }
-
         fun pointAddition(
             p1: EllipticCurvePoint,
             p2: EllipticCurvePoint,
             primeNumber: Long,
             a: Long
         ): EllipticCurvePoint {
-            if (p2.pointAtInfinity) return p1
-            try {
-                var lambda = if (p1.isEq(p2)) {
-                    (3 * (p1.x) * (p1.x) + a) * invMod(2 * p1.y, primeNumber)
-                } else {
-                    (p2.y - p1.y) * invMod(p2.x - p1.x, primeNumber)
-                }
-                lambda = Math.floorMod(lambda, primeNumber)
-                val x3 = Math.floorMod((lambda * lambda - p1.x - p2.x), primeNumber)
-
-                return EllipticCurvePoint(
-                    x3,
-                    Math.floorMod((lambda * (p1.x - x3) - p1.y), primeNumber),
-                    false
-                )
-            } catch (e: Exception) {
-                return EllipticCurvePoint(0, 0, true)
+            if (p2.pointAtInfinity) {
+                return p1
             }
-        }
+            if (p1.pointAtInfinity) {
+                return p2
+            }
+            val lambda: Long
+            if (mod(p1.x - p2.x, primeNumber) == 0L) {
+                if (mod(p1.y - p2.y, primeNumber) == 0L) {
+                    lambda = (3 * (p1.x) * (p1.x) + a) * invMod(2 * p1.y, primeNumber)
+                } else {
+                    return EllipticCurvePoint(0, 0, true)
+                }
+            } else {
+                lambda = mod((p2.y - p1.y), primeNumber) * invMod(p2.x - p1.x, primeNumber)
+            }
 
+            val x3 = mod(lambda * lambda - p1.x - p2.x, primeNumber)
+            val y3 = mod((lambda * (p1.x - x3) - p1.y), primeNumber)
+            return EllipticCurvePoint(x3, y3, false)
+        }
         fun pointSub(
             p1: EllipticCurvePoint,
             p2: EllipticCurvePoint,
             primeNumber: Long,
             a: Long
-        ): Pair<EllipticCurvePoint, EllipticCurvePoint> {
-            if (p1.isEq(p2)) return Pair(EllipticCurvePoint(0, 0, true), EllipticCurvePoint(0, 0, true))
-            return Pair(
-                pointAddition(EllipticCurvePoint(p2.x, -p2.y, false), p1, primeNumber, a),
-                pointAddition(p1, EllipticCurvePoint(p2.x, -p2.y, false), primeNumber, a)
-            )
+        ): EllipticCurvePoint{
+            if (p1.isEq(p2)) return EllipticCurvePoint(0, 0, true)
+            return pointAddition(EllipticCurvePoint(p2.x, -p2.y, false), p1, primeNumber, a)
+        }
+
+        private fun mod(dividend: Long, divisor: Long): Long {
+            var nB1: BigInteger = BigInteger.valueOf(dividend)
+            var nB2: BigInteger = BigInteger.valueOf(divisor)
+            return nB1.mod(nB2).longValueExact()
+        }
+        private fun invMod(
+            n1: Long,
+            n2: Long
+        ): Long {
+            var nB1: BigInteger = BigInteger.valueOf(n1)
+            var nB2: BigInteger = BigInteger.valueOf(n2)
+            return nB1.modInverse(nB2).longValueExact()
         }
     }
 }
