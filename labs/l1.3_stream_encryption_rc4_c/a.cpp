@@ -23,10 +23,11 @@
 
 using namespace std;
 
-void solve(string);
+void solve(string, string);
 
-int main(){
-    solve("plaintext");
+int main(int argc, char* argv[]){
+    solve(argv[1], argv[2]);
+
 }
 
 class Encryptor {        
@@ -81,8 +82,7 @@ class Encryptor {
 
 };
 
-void solve(string msg){
-    string key = "key";
+void solve(string msg, string key){
     vector<uint8_t> key_bytes(key.begin(), key.end());
     
     Encryptor rc4(key_bytes, 8);
